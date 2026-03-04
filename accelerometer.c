@@ -54,20 +54,33 @@ int main(int argc, char *argv[]) {
 
     // 2.3.2 - Offset method (Calibration)
     printf("Calibrating sensor... Please do not move it for 1 second.\n");
-    long sum_x = 0, sum_y = 0;
+    
+    long sum_x = 0, sum_y = 0, sum_z = 0; 
     int samples = 10;
+    
     for(int i = 0; i < samples; i++) {
         sum_x += read_word_2c(0x3B);
         sum_y += read_word_2c(0x3D);
+        sum_z += read_word_2c(0x3F);
         usleep(100000); // 100ms delay
     }
+    
     short offset_x = sum_x / samples;
     short offset_y = sum_y / samples;
+    
+    // Calculate Z offset keeping 1g gravitational force
+    long avg_z = sum_z / samples;
+    short offset_z;
+    if (avg_z > 0) {
+        offset_z = avg_z - 16384; // positive gravitation
+    } else {
+        offset_z = avg_z + 16384; // negative gravitation
+    }
     
     // Display the adapted message with the chosen interval (%.1f displays one decimal)
     printf("Calibration finished! Reading data every %.1f seconds...\n\n", interval_seconds);
 
-    // Calculate how many times we need to pause for 0.1 seconds (100000 microseconds)
+    // Calculate how many times we need to pause for 0.1 seconds
     int waiting_steps = (int)(interval_seconds * 10);
     if (waiting_steps < 1) waiting_steps = 1; 
 
@@ -75,7 +88,7 @@ int main(int argc, char *argv[]) {
     while (keep_running) {
         short acc_x = read_word_2c(0x3B) - offset_x;
         short acc_y = read_word_2c(0x3D) - offset_y;
-        short acc_z = read_word_2c(0x3F); // No massive offset on Z to keep gravity (1g)
+        short acc_z = read_word_2c(0x3F) - offset_z; 
 
         printf("Acceleration -> X: %.2f g  |  Y: %.2f g  |  Z: %.2f g\n", 
                acc_x / 16384.0, acc_y / 16384.0, acc_z / 16384.0);
