@@ -24,8 +24,21 @@ short read_word_2c(int addr) {
     return (short)((buf[0] << 8) | buf[1]);
 }
 
-int main() {
-    signal(SIGINT, sigint_handler); // Attach handler for CTRL-C
+int main(int argc, char *argv[]) {
+
+    float interval_seconds = 3.0; 
+
+    // Check if the user entered a command-line argument
+    if (argc > 1) {
+        interval_seconds = atof(argv[1]); 
+        
+        if (interval_seconds <= 0.0) {
+            printf("Invalid interval. Using the minimum value of 0.1 seconds.\n");
+            interval_seconds = 0.1;
+        }
+    }
+
+    signal(SIGINT, sigint_handler); // Attach the handler for CTRL-C
 
     // Open the I2C bus
     if ((file_i2c = open("/dev/i2c-1", O_RDWR)) < 0) {
@@ -50,20 +63,25 @@ int main() {
     }
     short offset_x = sum_x / samples;
     short offset_y = sum_y / samples;
-    printf("Calibration finished! Reading data every 3 seconds...\n\n");
+    
+    // Display the adapted message with the chosen interval (%.1f displays one decimal)
+    printf("Calibration finished! Reading data every %.1f seconds...\n\n", interval_seconds);
 
-    // 2.3.1 - Display readings every 3 seconds
+    // Calculate how many times we need to pause for 0.1 seconds (100000 microseconds)
+    int waiting_steps = (int)(interval_seconds * 10);
+    if (waiting_steps < 1) waiting_steps = 1; 
+
+    // 2.3.1 - Display readings
     while (keep_running) {
         short acc_x = read_word_2c(0x3B) - offset_x;
         short acc_y = read_word_2c(0x3D) - offset_y;
         short acc_z = read_word_2c(0x3F); // No massive offset on Z to keep gravity (1g)
 
-        // MPU-6000 has a scale factor of 16384 for +/- 2g
         printf("Acceleration -> X: %.2f g  |  Y: %.2f g  |  Z: %.2f g\n", 
                acc_x / 16384.0, acc_y / 16384.0, acc_z / 16384.0);
 
-        // Wait 3 seconds, but check frequently if the user pressed CTRL-C
-        for(int w = 0; w < 30 && keep_running; w++) {
+        // Wait based on input, but check for CTRL-C
+        for(int w = 0; w < waiting_steps && keep_running; w++) {
             usleep(100000); 
         }
     }
